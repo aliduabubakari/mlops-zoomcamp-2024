@@ -160,3 +160,5 @@ cython_debug/
 #.idea/
 Anaconda3-*.sh
 01-intro/green_taxi_data/
+
+*.pkl
