@@ -20,6 +20,13 @@ Predict the duration of New York City taxi trips using state-of-the-art ML model
   - [Customizing Model Hyperparameters](#customizing-model-hyperparameters)
   - [Hyperparameter Optimization](#hyperparameter-optimization)
   - [Feature Engineering Only](#feature-engineering-only)
+- [Model Prediction & Deployment](#model-prediction--deployment)
+  - [Using Pre-trained Pipelines](#using-pre-trained-pipelines)
+  - [Using Standalone Components](#using-standalone-components)
+  - [Using the Prediction Script](#using-the-prediction-script)
+  - [Reproducibility Guarantees](#reproducibility-guarantees)
+  - [MLflow Integration](#mlflow-integration)
+  - [Best Practices for Deployment](#best-practices-for-deployment)
 - [Accessing All Artifacts & Results](#accessing-all-artifacts--results)
 - [Working with the MLflow UI](#working-with-the-mlflow-ui)
 - [Examples](#examples)
@@ -343,6 +350,109 @@ python main.py --model rf --hyperopt --hyperopt-save-name rf_optimized --save-tr
 ```
 
 This creates an optimized model with integrated feature engineering in a single pipeline.
+
+---
+
+## Model Prediction & Deployment
+
+After training models with the `--save-transformer` flag, you can use them to make predictions on new taxi trip data. The system saves both:
+
+1. **Standalone components**: Individual transformer and model files
+2. **Complete pipelines**: Combined preprocessing + model files for end-to-end prediction
+
+### Using Pre-trained Pipelines
+
+The simplest approach is to use the saved pipeline, which handles both feature engineering and prediction in one step:
+
+```python
+import joblib
+import pandas as pd
+
+# Load the pipeline
+pipeline = joblib.load("models/rf_model_pipeline.joblib")
+
+# Load new raw data
+new_data = pd.read_csv("new_taxi_trips.csv")
+
+# Make predictions directly (preprocessing happens automatically)
+predictions = pipeline.predict(new_data)
+```
+
+### Using Standalone Components
+
+Alternatively, you can use the transformer and model separately:
+
+```python
+import joblib
+import pandas as pd
+
+# Load components
+transformer = joblib.load("models/run_20240510_123456/feature_transformer.joblib")
+model = joblib.load("models/rf_model.joblib")
+
+# Load new raw data
+new_data = pd.read_csv("new_taxi_trips.csv")
+
+# Transform features
+X = transformer.transform(new_data)
+
+# Make predictions
+predictions = model.predict(X)
+```
+
+### Using the Prediction Script
+
+We provide a command-line prediction script for batch processing:
+
+```bash
+# Using a complete pipeline:
+python predict.py --pipeline models/rf_model_pipeline.joblib --input new_trips.csv --output predictions.csv
+
+# Or using separate components:
+python predict.py --transformer models/feature_transformer.joblib --model models/rf_model.joblib --input new_trips.csv --output predictions.csv
+```
+
+Additional options:
+- `--include-input`: Add predictions as a column to the original input data
+- Output can be viewed and analyzed with standard tools:
+  ```bash
+  head predictions.csv
+  ```
+
+### Reproducibility Guarantees
+
+The saved transformer and pipelines ensure:
+
+1. **Consistent preprocessing**: The exact same feature engineering steps are applied to new data
+2. **Handling of edge cases**: Consistent handling of missing values, outliers, and categorical encoding
+3. **Full reproducibility**: The same input will always produce the same output
+
+### MLflow Integration
+
+All model artifacts, including feature transformers and pipelines, are tracked in MLflow:
+
+1. View all experiments with `mlflow ui`
+2. Download any model artifact from the MLflow UI
+3. Registered models can be loaded directly from MLflow:
+   ```python
+   import mlflow
+   
+   # Set tracking URI if using remote server
+   mlflow.set_tracking_uri("file://./mlruns")
+   
+   # Load a specific model version by run ID
+   model = mlflow.pyfunc.load_model(f"runs:/{run_id}/model")
+   predictions = model.predict(new_data)
+   ```
+
+### Best Practices for Deployment
+
+When deploying models to production:
+
+1. **Version control**: Always include model version in filenames
+2. **Input validation**: Validate new data matches the expected schema
+3. **Monitoring**: Track prediction distribution drift over time
+4. **Batch vs. Real-time**: Use appropriate deployment strategy based on latency needs
 
 ---
 
